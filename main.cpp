@@ -5,24 +5,6 @@
 #include <bitset>
 #include "utils.cuh"
 
-//class Rigid3f
-//{
-//public:
-//    Rigid3f()
-//    {
-//        _translation = {0, 0, 0};
-//        _rotation = {0, 0, 0};
-//    }
-//    Rigid3f(const Eigen::Vector3f& translation, const Eigen::Vector3f& rotation)
-//    {
-//        _translation = translation;
-//        _rotation = rotation;
-//    }
-//
-//    Eigen::Vector3f _translation;
-//    Eigen::Vector3f _rotation;
-//};
-
 using KeyType = std::bitset<3 * 32>;
 using uint32 = uint32_t;
 KeyType IndexToKey(Eigen::Vector3i& index){
@@ -91,67 +73,14 @@ void GenerateSearchPose(std::vector<Rigid3f>& pose, int linear_window_size,
     }
 }
 
-Eigen::Matrix4f RigidToMatrix(const Rigid3f& trans)
-{
-    Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
-
-    Eigen::Vector3f xyz_vec = trans._translation;
-    Eigen::Vector3f rpy_vec = trans._rotation;
-
-    Eigen::Matrix3f rotation = Eigen::Matrix3f(Eigen::AngleAxisf(rpy_vec[0], Eigen::Vector3f::UnitZ())
-                                              *Eigen::AngleAxisf(rpy_vec[1], Eigen::Vector3f::UnitY())
-                                              *Eigen::AngleAxisf(rpy_vec[2], Eigen::Vector3f::UnitX()));
-    transform.block<3,3>(0, 0) = rotation;
-    transform.block<3,1>(0, 3) = xyz_vec;
-
-    return transform;
-}
-
-
-
-
-//bool operator==(const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
-//{
-//    return fabs(lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&fabs(lhs[2]-rhs[2])<1e-6;
-//}
-//
-//bool operator>(const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
-//{
-//    return (lhs[0]>rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]>rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]>rhs[2]);
-//}
-//
-//bool operator<(const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
-//{
-//    return (lhs[0]<rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]<rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]<rhs[2]);
-//}
-//
-//struct eigen_compare
-//{
-//    bool operator()(const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
-//    {
-//        return (lhs[0]<rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]<rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]<rhs[2]);
-//    }
-//};
-//
-//int BinarySearchRecursive(std::vector<Eigen::Vector3f> points, int low, int high, Eigen::Vector3f point)
-//{
-//    if (low > high)
-//        return -1;
-//    int mid = low + (high - low) / 2;
-//    if (points[mid] == point)
-//        return mid;
-//    else if (points[mid] > point)
-//        return BinarySearchRecursive(points, low, mid - 1, point);
-//    else
-//        return BinarySearchRecursive(points, mid + 1, high, point);
-//}
 
 
 
 
 int main(){
-    std::string submap_pcd = "../map.txt";
-    std::string target_pcd = "../scan.txt";
+    std::string submap_pcd = "../points/pcd_34.txt";
+    std::string target_pcd = "../points/pcd_36.txt";
+
     std::vector<Eigen::Vector3f> submap_point;
     std::vector<Eigen::Vector3i> submap;
     std::vector<Eigen::Vector3f> target_point;
@@ -166,42 +95,9 @@ int main(){
     int angular_window_size = int(std::round(0.04/angular_step_size));
     std::vector<Rigid3f> pose;
 
-//    std::cout<<"GenerateSearchPose"<<std::endl;
-//    clock_t start = clock();
-//    GenerateSearchPose(pose, linear_window_size, angular_window_size, angular_step_size);
-//    std::cout<<sizeof(Eigen::Vector3i) * submap.size()<<std::endl;
-
-//    std::cout<<submap.size()<<std::endl;
-//    std::cout<<target_point.size()<<std::endl;
-//    std::cout<<pose.size()<<std::endl;
-
+    std::cout<<"GenerateSearchPose"<<std::endl;
+    GenerateSearchPose(pose, linear_window_size, angular_window_size, angular_step_size);
     GetOptPoseIndex(submap_point, submap_point, pose);
-
-//    Eigen::Matrix3f rotation = Eigen::Matrix3f::Identity();
-//
-//    std::vector<Eigen::Vector3f> trans_point(1000);
-//    clock_t start = clock();
-//    for(int i = 0 ; i < submap.size(); i++)
-//    {
-//        for(int j = 0 ; j < 1000; j++)
-//        {
-//            trans_point[j] = submap[i][0] * rotation.col(0) / 0.02 +submap[i][1] * rotation.col(1) / 0.02 +submap[i][2] * rotation.col(2) / 0.02;
-//        }
-//    }
-//    clock_t during = clock() - start;
-//    std::cout<<"CPU: "<<double(during / 1000.0)<<std::endl;
-
-
-
-
-//    std::sort(submap_point.begin(), submap_point.end(), eigen_compare());
-//
-//    for(auto point:submap_point)
-//    {
-//        int idx = BinarySearchRecursive(submap_point, 0, submap_point.size()-1, point);
-//        printf("%f, %f, %f: %d\n", point[0], point[1], point[2], idx);
-//    }
-
 
     return 0;
 }
