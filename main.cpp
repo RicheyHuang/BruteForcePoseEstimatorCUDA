@@ -1,29 +1,27 @@
 #include <iostream>
 #include <vector>
-#include <Eigen/Core>
-#include <Eigen/Dense>
 #include <fstream>
 #include <unordered_set>
 #include <bitset>
 #include "utils.cuh"
 
-class Rigid3f
-{
-public:
-    Rigid3f()
-    {
-        _translation = {0, 0, 0};
-        _rotation = {0, 0, 0};
-    }
-    Rigid3f(const Eigen::Vector3f& translation, const Eigen::Vector3f& rotation)
-    {
-        _translation = translation;
-        _rotation = rotation;
-    }
-
-    Eigen::Vector3f _translation;
-    Eigen::Vector3f _rotation;
-};
+//class Rigid3f
+//{
+//public:
+//    Rigid3f()
+//    {
+//        _translation = {0, 0, 0};
+//        _rotation = {0, 0, 0};
+//    }
+//    Rigid3f(const Eigen::Vector3f& translation, const Eigen::Vector3f& rotation)
+//    {
+//        _translation = translation;
+//        _rotation = rotation;
+//    }
+//
+//    Eigen::Vector3f _translation;
+//    Eigen::Vector3f _rotation;
+//};
 
 using KeyType = std::bitset<3 * 32>;
 using uint32 = uint32_t;
@@ -152,8 +150,8 @@ Eigen::Matrix4f RigidToMatrix(const Rigid3f& trans)
 
 
 int main(){
-    std::string submap_pcd = "../points/pcd_34.txt";
-    std::string target_pcd = "../points/pcd_36.txt";
+    std::string submap_pcd = "../map.txt";
+    std::string target_pcd = "../scan.txt";
     std::vector<Eigen::Vector3f> submap_point;
     std::vector<Eigen::Vector3i> submap;
     std::vector<Eigen::Vector3f> target_point;
@@ -163,11 +161,13 @@ int main(){
     std::cout<<"pcd to map"<<std::endl;
     PcdToMap(submap, submap_point);
 
-    int linear_window_size = int(std::round(0.1/0.02));
+    int linear_window_size = int(std::round(0.04/0.02));
     float angular_step_size = 0.01;
-    int angular_window_size = int(std::round(0.1/angular_step_size));
+    int angular_window_size = int(std::round(0.04/angular_step_size));
     std::vector<Rigid3f> pose;
+
 //    std::cout<<"GenerateSearchPose"<<std::endl;
+//    clock_t start = clock();
 //    GenerateSearchPose(pose, linear_window_size, angular_window_size, angular_step_size);
 //    std::cout<<sizeof(Eigen::Vector3i) * submap.size()<<std::endl;
 
@@ -175,7 +175,7 @@ int main(){
 //    std::cout<<target_point.size()<<std::endl;
 //    std::cout<<pose.size()<<std::endl;
 
-    kernelTest(submap_point, submap_point);
+    GetOptPoseIndex(submap_point, submap_point, pose);
 
 //    Eigen::Matrix3f rotation = Eigen::Matrix3f::Identity();
 //
