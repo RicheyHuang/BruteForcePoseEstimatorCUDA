@@ -36,9 +36,10 @@ struct get_rotation
         float gamma = rpy[2];
 
         Eigen::Matrix3f rotation;
-        rotation << cosf(alpha)*cosf(gamma)-cosf(beta)*sinf(alpha)*sinf(gamma), -cosf(beta)*cosf(gamma)*sinf(alpha)-cosf(alpha)*sinf(gamma),  sinf(alpha)*sinf(beta),
-                    cosf(gamma)*sinf(alpha)+cosf(alpha)*cosf(beta)*sinf(gamma),  cosf(alpha)*cosf(beta)*cosf(gamma)-sinf(alpha)*sinf(gamma), -cosf(alpha)*sinf(beta),
-                    sinf(beta)*sinf(gamma),                                      cosf(gamma)*sinf(beta),                                      cosf(beta);
+        rotation << cosf(beta)*cosf(gamma),                                     -cosf(beta)*sinf(gamma),                                        sinf(beta),
+                    sinf(alpha)*sinf(beta)*cosf(gamma)+cosf(alpha)*sinf(gamma), -sinf(alpha)*sinf(beta)*sinf(gamma)+cosf(alpha)*cosf(gamma),   -sinf(alpha)*cosf(beta),
+                   -cosf(alpha)*sinf(beta)*cosf(gamma)+sinf(alpha)*sinf(gamma),  cosf(alpha)*sinf(beta)*sinf(gamma)+sinf(alpha)*cosf(gamma),    cosf(alpha)*cosf(beta);
+
         return rotation;
     }
 };
@@ -61,10 +62,10 @@ struct get_transform
         float z = xyz[2];
 
         Eigen::Matrix4f transform;
-        transform << cosf(alpha)*cosf(gamma)-cosf(beta)*sinf(alpha)*sinf(gamma), -cosf(beta)*cosf(gamma)*sinf(alpha)-cosf(alpha)*sinf(gamma),  sinf(alpha)*sinf(beta),   x,
-                     cosf(gamma)*sinf(alpha)+cosf(alpha)*cosf(beta)*sinf(gamma),  cosf(alpha)*cosf(beta)*cosf(gamma)-sinf(alpha)*sinf(gamma), -cosf(alpha)*sinf(beta),   y,
-                     sinf(beta)*sinf(gamma),                                      cosf(gamma)*sinf(beta),                                      cosf(beta),               z,
-                     0.0,                                                         0.0,                                                         0.0,                    1.0;
+        transform << cosf(beta)*cosf(gamma),                                     -cosf(beta)*sinf(gamma),                                        sinf(beta),              x,
+                     sinf(alpha)*sinf(beta)*cosf(gamma)+cosf(alpha)*sinf(gamma), -sinf(alpha)*sinf(beta)*sinf(gamma)+cosf(alpha)*cosf(gamma),   -sinf(alpha)*cosf(beta),  y,
+                    -cosf(alpha)*sinf(beta)*cosf(gamma)+sinf(alpha)*sinf(gamma),  cosf(alpha)*sinf(beta)*sinf(gamma)+sinf(alpha)*cosf(gamma),    cosf(alpha)*cosf(beta),  z,
+                     0.0,                                                         0.0,                                                           0.0,                     1.0;
         return transform;
     }
 };
@@ -205,130 +206,242 @@ struct compute_score
 //}
 
 
-
-
-
-int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& submap, const std::vector<Eigen::Vector3f>& map, const std::vector<Rigid3f>& poses)
+struct get_unit_pose
 {
-//    thrust::device_vector<Eigen::Vector3f> dev_submap = submap;
-//
-//    float scores[100];
-//    float* dev_scores;
-//
-//    cudaMalloc(&dev_scores,100* sizeof(float));
-//
-//    Kernel<<<100,1>>>(thrust::raw_pointer_cast(&dev_submap[0]), thrust::raw_pointer_cast(&dev_submap[0]), dev_scores);
-//
-//    cudaMemcpy(scores, dev_scores, 100* sizeof(float), cudaMemcpyDeviceToHost);
-//
-//    cudaFree(dev_scores);
-//
-//    cudaDeviceSynchronize();
-//
-//    for(int i = 0; i < 100; i++)
-//    {
-//        std::cout<<scores[i]<<std::endl;
-//    }
+    const int _offset;
+    const float _resolution;
+    explicit get_unit_pose(const int& offset, const float& resolution):_offset(offset), _resolution(resolution){}
+
+    __host__ __device__
+    float operator()(int index)
+    {
+//        return float((index-_offset)*_resolution);
+        return float(index);
+    }
+};
+
+struct get_6dof
+{
+    const int _loop_size_pyxyz;
+    const int _loop_size_yxyz;
+    const int _loop_size_xyz;
+    const int _loop_size_yz;
+    const int _loop_size_z;
 
 
-//    int poses_num = 100000;
+    const float* _angles;
+    const float* _displacements;
 
-//    Eigen::Matrix3f rotation = Eigen::Matrix3f::Identity();
-//    thrust::device_vector<Eigen::Vector3f> dev_submap = submap;
-//    thrust::device_vector<Eigen::Vector3f> dev_trans_submap = CloudTransform(dev_submap, rotation);
 
+    explicit get_6dof(const int& loop_size_pyxyz,
+                      const int& loop_size_yxyz,
+                      const int& loop_size_xyz,
+                      const int& loop_size_yz,
+                      const int& loop_size_z,
+                      const float* displacements,
+                      const float* angles):
+                      _loop_size_pyxyz(loop_size_pyxyz),
+                      _loop_size_yxyz(loop_size_yxyz),
+                      _loop_size_xyz(loop_size_xyz),
+                      _loop_size_yz(loop_size_yz),
+                      _loop_size_z(loop_size_z),
+                      _angles(angles),
+                      _displacements(displacements){}
+
+    __host__ __device__
+    Eigen::Matrix<float, 6, 1> operator()(int pose_index)
+    {
+        Eigen::Matrix<float, 6, 1> pose;
+
+        pose(0, 0) = _angles[int(pose_index/_loop_size_pyxyz)];
+        pose(1, 0) = _angles[int(pose_index%_loop_size_pyxyz/_loop_size_yxyz)];
+        pose(2, 0) = _angles[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz/_loop_size_xyz)];
+        pose(3, 0) = _displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz/_loop_size_yz)];
+        pose(4, 0) = _displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz%_loop_size_yz/_loop_size_z)];
+        pose(5, 0) = _displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz%_loop_size_yz%_loop_size_z)];
+
+        return pose;
+    }
+};
+
+
+int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& submap, const std::vector<Eigen::Vector3f>& map, const std::vector<Rigid3f>& pose)
+{
     float time;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
 
-    thrust::device_vector<Rigid3f> dev_poses = poses;
-    thrust::device_vector<Eigen::Matrix3f> dev_rotations(poses.size());
-//    thrust::fill(thrust::device, dev_rotations.begin(), dev_rotations.end(), rotation);
-    thrust::transform(thrust::device, dev_poses.begin(), dev_poses.end(), dev_rotations.begin(), get_rotation());
+    int linear_winsize = 2;
+    float linear_step = 0.02;
+    int linear_space_size = 2*linear_winsize+1;
+    thrust::device_vector<int> linear_indices(linear_space_size);
+    thrust::sequence(linear_indices.begin(), linear_indices.end());
+    cudaDeviceSynchronize();
+    thrust::device_vector<float> displacements(linear_space_size);
+    thrust::transform(linear_indices.begin(), linear_indices.end(), displacements.begin(), get_unit_pose(linear_winsize, linear_step));
     cudaDeviceSynchronize();
 
-    std::cout<<"rotations acquired"<<std::endl;
-    std::cout<<"pose num:"<<dev_rotations.size()<<std::endl;
+    int angular_winsize = 2;
+    float angular_step = 0.01;
+    int angular_space_size = 2*angular_winsize+1;
+    thrust::device_vector<int> angular_indices(angular_space_size);
+    thrust::sequence(angular_indices.begin(), angular_indices.end());
+    cudaDeviceSynchronize();
+    thrust::device_vector<float> angles(angular_space_size);
+    thrust::transform(angular_indices.begin(), angular_indices.end(), angles.begin(), get_unit_pose(angular_winsize, angular_step));
+    cudaDeviceSynchronize();
 
+    int pose_num = int(pow(angular_space_size,3)*pow(linear_space_size, 3));
+    thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses(pose_num);
 
+    thrust::device_vector<int> pose_indices(pose_num);
+    thrust::sequence(pose_indices.begin(), pose_indices.end());
+    cudaDeviceSynchronize();
+
+    int loop_size_pyxyz = int(pow(angular_space_size,2)*pow(linear_space_size, 3));
+    int loop_size_yxyz = int(angular_space_size*pow(linear_space_size, 3));
+    int loop_size_xyz = int(pow(linear_space_size, 3));
+    int loop_size_yz = int(pow(linear_space_size, 2));
+    int loop_size_z = int(linear_space_size);
+
+    thrust::transform(thrust::device, pose_indices.begin(), pose_indices.end(), poses.begin(), get_6dof(loop_size_pyxyz, loop_size_yxyz, loop_size_xyz,
+                      loop_size_yz, loop_size_z, thrust::raw_pointer_cast(&angles[0]), thrust::raw_pointer_cast(&displacements[0])));
+    cudaDeviceSynchronize();
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
     printf("Time to generate:  %3.1f ms \n", time);
 
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
 
-
-
-    thrust::device_vector<Eigen::Vector3f> trans_point(poses.size());
-
-    thrust::device_vector<float> score_tile(poses.size());
-    thrust::device_vector<float> score_bins(poses.size());
-    thrust::fill(thrust::device, score_bins.begin(), score_bins.end(), 0.0);
-    cudaDeviceSynchronize();
-
-    int map_size = map.size();
-    int submap_size = submap.size();
-    thrust::device_vector<Eigen::Vector3f> dev_map = map;
-
-    thrust::sort(thrust::device, dev_map.begin(), dev_map.end(), eigen_compare());
-    cudaDeviceSynchronize();
-
-//    thrust::host_vector<Eigen::Vector3f> sorted_map = dev_map;
-//    for(int i = 0; i < sorted_map.size(); i++)
-//    {
-//        std::cout<<sorted_map[i]<<std::endl;
-//        std::cout<<std::endl;
-//    }
-
-//    thrust::device_ptr<Eigen::Vector3f> dev_map_ptr = &dev_map[0];
-
-
-
-//    clock_t start = clock();
-
-
-    for(int i = 0 ; i < submap.size(); i++)
+    thrust::host_vector<Eigen::Matrix<float, 6, 1> > host = poses;
+    for(int i = 0; i < host.size(); i++)
     {
-        thrust::transform(thrust::device, dev_rotations.begin(), dev_rotations.end(), trans_point.begin(), point_transform(submap[i]));
-        cudaDeviceSynchronize();
-        thrust::transform(thrust::device, trans_point.begin(), trans_point.end(), score_tile.begin(), match(thrust::raw_pointer_cast(&dev_map[0]), map_size));
-        cudaDeviceSynchronize();
-        thrust::transform(thrust::device, score_bins.begin(), score_bins.end(), score_tile.begin(), score_bins.begin(), thrust::plus<float>());
-        cudaDeviceSynchronize();
+        std::cout<<host[i][0]<<", "<<host[i][1]<<", "<<host[i][2]<<", "<<host[i][3]<<", "<<host[i][4]<<", "<<host[i][5]<<", "<<std::endl;
     }
-    thrust::transform(thrust::device, score_bins.begin(), score_bins.end(), score_bins.begin(), compute_score(submap_size));
-    cudaDeviceSynchronize();
 
-    thrust::device_vector<float>::iterator max_element_iter = thrust::max_element(score_bins.begin(), score_bins.end());
+    return 0;
 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate:  %3.1f ms \n", time);
 
-//    clock_t during = clock() - start;
-//    std::cout<<"GPU: "<<double(during / 1000.0)<<std::endl;
 
-    int opt_pose_idx = max_element_iter - score_bins.begin();
 
+
+
+
+//
+//
+////    thrust::device_vector<Eigen::Vector3f> dev_submap = submap;
+////
+////    float scores[100];
+////    float* dev_scores;
+////
+////    cudaMalloc(&dev_scores,100* sizeof(float));
+////
+////    Kernel<<<100,1>>>(thrust::raw_pointer_cast(&dev_submap[0]), thrust::raw_pointer_cast(&dev_submap[0]), dev_scores);
+////
+////    cudaMemcpy(scores, dev_scores, 100* sizeof(float), cudaMemcpyDeviceToHost);
+////
+////    cudaFree(dev_scores);
+////
+////    cudaDeviceSynchronize();
+////
+////    for(int i = 0; i < 100; i++)
+////    {
+////        std::cout<<scores[i]<<std::endl;
+////    }
+//
+//
+////    int poses_num = 100000;
+//
+////    Eigen::Matrix3f rotation = Eigen::Matrix3f::Identity();
+////    thrust::device_vector<Eigen::Vector3f> dev_submap = submap;
+////    thrust::device_vector<Eigen::Vector3f> dev_trans_submap = CloudTransform(dev_submap, rotation);
+//
+//    float time;
+//    cudaEvent_t start, stop;
+//    cudaEventCreate(&start);
+//    cudaEventCreate(&stop);
+//    cudaEventRecord(start, 0);
+//
+//    thrust::device_vector<Rigid3f> dev_poses = poses;
+//    thrust::device_vector<Eigen::Matrix3f> dev_rotations(poses.size());
+////    thrust::fill(thrust::device, dev_rotations.begin(), dev_rotations.end(), rotation);
+//    thrust::transform(thrust::device, dev_poses.begin(), dev_poses.end(), dev_rotations.begin(), get_rotation());
+//    cudaDeviceSynchronize();
+//
+//    std::cout<<"rotations acquired"<<std::endl;
+//    std::cout<<"pose num:"<<dev_rotations.size()<<std::endl;
+//
+//
+//
+//    cudaEventRecord(stop, 0);
+//    cudaEventSynchronize(stop);
+//    cudaEventElapsedTime(&time, start, stop);
+//    printf("Time to generate:  %3.1f ms \n", time);
+//
+//    cudaEventCreate(&start);
+//    cudaEventCreate(&stop);
+//    cudaEventRecord(start, 0);
+//
+//
+//
+//    thrust::device_vector<Eigen::Vector3f> trans_point(poses.size());
+//
+//    thrust::device_vector<float> score_tile(poses.size());
+//    thrust::device_vector<float> score_bins(poses.size());
+//    thrust::fill(thrust::device, score_bins.begin(), score_bins.end(), 0.0);
+//    cudaDeviceSynchronize();
+//
+//    int map_size = map.size();
+//    int submap_size = submap.size();
+//    thrust::device_vector<Eigen::Vector3f> dev_map = map;
+//
+//    thrust::sort(thrust::device, dev_map.begin(), dev_map.end(), eigen_compare());
+//    cudaDeviceSynchronize();
+//
+////    thrust::host_vector<Eigen::Vector3f> sorted_map = dev_map;
+////    for(int i = 0; i < sorted_map.size(); i++)
+////    {
+////        std::cout<<sorted_map[i]<<std::endl;
+////        std::cout<<std::endl;
+////    }
+//
+////    thrust::device_ptr<Eigen::Vector3f> dev_map_ptr = &dev_map[0];
+//
+//
+//
+////    clock_t start = clock();
+//
+//
+//    for(int i = 0 ; i < submap.size(); i++)
+//    {
+//        thrust::transform(thrust::device, dev_rotations.begin(), dev_rotations.end(), trans_point.begin(), point_transform(submap[i]));
+//        cudaDeviceSynchronize();
+//        thrust::transform(thrust::device, trans_point.begin(), trans_point.end(), score_tile.begin(), match(thrust::raw_pointer_cast(&dev_map[0]), map_size));
+//        cudaDeviceSynchronize();
+//        thrust::transform(thrust::device, score_bins.begin(), score_bins.end(), score_tile.begin(), score_bins.begin(), thrust::plus<float>());
+//        cudaDeviceSynchronize();
+//    }
+//    thrust::transform(thrust::device, score_bins.begin(), score_bins.end(), score_bins.begin(), compute_score(submap_size));
+//    cudaDeviceSynchronize();
+//
+//    thrust::device_vector<float>::iterator max_element_iter = thrust::max_element(score_bins.begin(), score_bins.end());
+//
+//    cudaEventRecord(stop, 0);
+//    cudaEventSynchronize(stop);
+//    cudaEventElapsedTime(&time, start, stop);
+//    printf("Time to generate:  %3.1f ms \n", time);
+//
+////    clock_t during = clock() - start;
+////    std::cout<<"GPU: "<<double(during / 1000.0)<<std::endl;
+//
+//    int opt_pose_idx = max_element_iter - score_bins.begin();
+//
 //    std::cout<<"opt pose index: "<<opt_pose_idx<<std::endl;
 //    std::cout<<"opt pose score: "<<score_bins[opt_pose_idx]<<std::endl;
 //    std::cout<<"opt pose: "<<poses[opt_pose_idx]._rotation<<std::endl;
-
-    int count = 0;
-    for(int i = 0; i < score_bins.size(); i++)
-    {
-        if(score_bins[i]==1.0)
-        {
-            std::cout<<"pose: "<<poses[i]._rotation<<std::endl;
-        }
-    }
-
-    return opt_pose_idx;
+//
+//    return opt_pose_idx;
 }

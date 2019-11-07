@@ -1,7 +1,5 @@
 #include <iostream>
 #include <vector>
-#include <Eigen/Core>
-#include <Eigen/Dense>
 #include <fstream>
 #include <unordered_set>
 #include <bitset>
@@ -152,8 +150,8 @@ Eigen::Matrix4f RigidToMatrix(const Rigid3f& trans)
 
 
 int main(){
-    std::string submap_pcd = "../points/pcd_34.txt";
-    std::string target_pcd = "../points/pcd_36.txt";
+    std::string submap_pcd = "../map.txt";
+    std::string target_pcd = "../scan.txt";
     std::vector<Eigen::Vector3f> submap_point;
     std::vector<Eigen::Vector3i> submap;
     std::vector<Eigen::Vector3f> target_point;
@@ -168,9 +166,9 @@ int main(){
     int angular_window_size = int(std::round(0.04/angular_step_size));
     std::vector<Rigid3f> pose;
 
-    std::cout<<"GenerateSearchPose"<<std::endl;
+//    std::cout<<"GenerateSearchPose"<<std::endl;
 //    clock_t start = clock();
-    GenerateSearchPose(pose, linear_window_size, angular_window_size, angular_step_size);
+//    GenerateSearchPose(pose, linear_window_size, angular_window_size, angular_step_size);
 //    std::cout<<sizeof(Eigen::Vector3i) * submap.size()<<std::endl;
 
 //    std::cout<<submap.size()<<std::endl;

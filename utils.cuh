@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <Eigen/Core>
+#include <Eigen/Dense>
 #include <host_defines.h>
 #include <cuda_runtime_api.h>
 #include <cuda_runtime.h>
