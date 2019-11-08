@@ -48,56 +48,25 @@ void PcdToMap(std::vector<Eigen::Vector3i>& pcd_map, std::vector<Eigen::Vector3f
     }
 }
 
-void GenerateSearchPose(std::vector<Rigid3f>& pose, int linear_window_size,
-                        int angular_window_size, float angular_step_size){
-    float resolution = 0.02;
-    for (int z = -linear_window_size; z <= linear_window_size; ++z) {
-        for (int y = -linear_window_size; y <= linear_window_size; ++y) {
-            for (int x = -linear_window_size; x <= linear_window_size; ++x) {
-                for (int rz = -angular_window_size; rz <= angular_window_size; ++rz) {
-                    for (int ry = -angular_window_size; ry <= angular_window_size; ++ry) {
-                        for (int rx = -angular_window_size; rx <= angular_window_size;
-                             ++rx) {
-                            const Eigen::Vector3f angle_axis(rx * angular_step_size,
-                                                             ry * angular_step_size,
-                                                             rz * angular_step_size);
-                            pose.emplace_back(
-                                    Eigen::Vector3f(x * resolution, y * resolution,
-                                                    z * resolution),
-                                    angle_axis);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-
 
 
 int main(){
-    std::string submap_pcd = "../points/pcd_34.txt";
-    std::string target_pcd = "../points/pcd_36.txt";
+    std::string map_pcd = "../points/pcd_34.txt";
+    std::string scan_pcd = "../points/pcd_34.txt";
 
-    std::vector<Eigen::Vector3f> submap_point;
-    std::vector<Eigen::Vector3i> submap;
-    std::vector<Eigen::Vector3f> target_point;
+    std::vector<Eigen::Vector3f> map;
+    std::vector<Eigen::Vector3f> scan;
     std::cout<<"read txt"<<std::endl;
-    ReadTxt(submap_point, submap_pcd);
-    ReadTxt(target_point, target_pcd);
-    std::cout<<"pcd to map"<<std::endl;
-    PcdToMap(submap, submap_point);
+    ReadTxt(map, map_pcd);
+    ReadTxt(scan, scan_pcd);
 
-    int linear_window_size = int(std::round(0.04/0.02));
+    float linear_step_size = 0.02;
+    int linear_window_size = int(std::round(0.04/linear_step_size));
     float angular_step_size = 0.01;
     int angular_window_size = int(std::round(0.04/angular_step_size));
-    std::vector<Rigid3f> pose;
+    float map_resolution = 1.0;
 
-    std::cout<<"GenerateSearchPose"<<std::endl;
-    GenerateSearchPose(pose, linear_window_size, angular_window_size, angular_step_size);
-    GetOptPoseIndex(submap_point, submap_point, pose);
+    GetOptPoseIndex(scan, map, linear_window_size, linear_step_size, angular_window_size, angular_step_size, map_resolution);
 
     return 0;
 }
