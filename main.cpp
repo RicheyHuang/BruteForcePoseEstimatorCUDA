@@ -59,17 +59,17 @@ int main(){
 
     std::cout<<"Data loaded."<<std::endl;
 
-    float angular_range = 0.04;
+    float angular_range = 0.03;
     float angular_step_size = 0.01;
     int angular_window_size = int(std::round(angular_range/angular_step_size));
 
-    float linear_range = 0.02;
+    float linear_range = 0.03;
     float linear_step_size = 0.01;
     int linear_window_size = int(std::round(linear_range/linear_step_size));
 
     float map_resolution = 0.02;
-    Eigen::Vector3f angular_init_pose = {0, 0, 0};
-    Eigen::Vector3f linear_init_pose = {0, 0, 0};
+    Eigen::Vector3f angular_init_pose = {0.0, 0.0, 0.0};
+    Eigen::Vector3f linear_init_pose = {0.0, 0.0, 0.0};
 
     std::cout<<"Initial Pose: (roll)"<<angular_init_pose[0]<<" rad, (pitch)"
                                      <<angular_init_pose[1]<<" rad, (yaw)"

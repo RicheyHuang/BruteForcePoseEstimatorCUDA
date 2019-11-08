@@ -25,8 +25,8 @@ struct get_transform
 //        // XYZ order
 //        transform << cosf(beta)*cosf(alpha),     sinf(gamma)*sinf(beta)*cosf(alpha)-cosf(gamma)*sinf(alpha),    cosf(gamma)*sinf(beta)*cosf(alpha)+sinf(gamma)*sinf(alpha), x,
 //                     cosf(beta)*sinf(alpha),     sinf(gamma)*sinf(beta)*sinf(alpha)+cosf(gamma)*cosf(alpha),    cosf(gamma)*sinf(beta)*sinf(alpha)-sinf(gamma)*cosf(alpha), y,
-//                    -sinf(beta),                 sinf(gamma)*cosf(beta),                                        cosf(gamma)*cosf(beta)                                      z,
-//                     0.0,                         0.0,                                                           0.0,                                                        1.0;
+//                    -sinf(beta),                 sinf(gamma)*cosf(beta),                                        cosf(gamma)*cosf(beta),                                     z,
+//                     0.0,                        0.0,                                                           0.0,                                                        1.0;
 
         return transform;
     }
