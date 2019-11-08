@@ -285,6 +285,134 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const Eigen::Ve
     return poses;
 }
 
+
+// create thrust vector of thrust vector
+//thrust::device_vector<Eigen::Vector3f> trans_scans[pose_num];
+//trans_scans[0] = thrust::device_vector<Eigen::Vector3f>(scan_size);
+
+// nested kernel example
+//struct aFuntor : public thrust::unary_function<int, int>
+//{
+//    aFuntor(int* av__, int* bv__, const int& N__) : av_(av__), bv_(bv__), N_(N__) {};
+//
+//    __host__ __device__
+//    int operator()(const int& idx)
+//    {
+//
+//        thrust::device_ptr<int> av_dpt = thrust::device_pointer_cast(av_);
+//
+//        int res = thrust::reduce(thrust::device, av_dpt, av_dpt+N_);
+//
+//        return res;
+//    }
+//
+//    int* av_;
+//    int* bv_;
+//    int N_;
+//};
+//
+//
+//int main(void)
+//{
+//    int N = 5;
+//    std::vector<int> av = {0,1,3,5};
+//    std::vector<int> bv = {0,10,20,30};
+//    thrust::device_vector<int> av_d(N);
+//    thrust::device_vector<int> bv_d(N);
+//    av_d = av; bv_d = bv;
+//
+//    // initial value of the reduction
+//    int init=0;
+//
+//    // binary operations
+//    thrust::plus<int>        bin_op;
+//
+//    int res =
+//            thrust::transform_reduce(thrust::counting_iterator<int>(0),
+//                                     thrust::counting_iterator<int>(N-1),
+//                                     aFuntor(thrust::raw_pointer_cast(av_d.data()),
+//                                             thrust::raw_pointer_cast(bv_d.data()),
+//                                             N),
+//                                     init,
+//                                     bin_op);
+//
+//    std::cout << "result is: " << res << std::endl;
+//    return 0;
+//}
+
+
+
+struct compute_point_score:public thrust::unary_function<Eigen::Vector3f, float> // <arg, result>
+{
+    Eigen::Matrix3f _rotation;
+
+    explicit compute_point_score(Eigen::Matrix3f rotation):_rotation(rotation){}
+
+    __host__ __device__
+
+    float operator()(Eigen::Vector3f& point)
+    {
+        Eigen::Vector3f trans_point = point[0] * _rotation.col(0) + point[1] * _rotation.col(1) + point[2] * _rotation.col(2);
+        float score = trans_point[3];
+        return score;
+    }
+};
+
+
+
+struct compute_cloud_score:public thrust::unary_function<Eigen::Matrix<float, 6, 1>, float> // <arg, result>
+{
+    Eigen::Vector3f* _scan;
+    int _scan_size;
+
+    compute_cloud_score(Eigen::Vector3f* scan, int& scan_size):_scan(scan), _scan_size(scan_size){}
+
+    __host__ __device__
+    float operator()(const Eigen::Matrix<float, 6, 1>& pose)
+    {
+        float alpha = pose[0];
+        float beta  = pose[1];
+        float gamma = pose[2];
+
+        Eigen::Matrix3f rotation;
+
+        rotation << cosf(beta)*cosf(gamma),                                     -cosf(beta)*sinf(gamma),                                        sinf(beta),
+                sinf(alpha)*sinf(beta)*cosf(gamma)+cosf(alpha)*sinf(gamma), -sinf(alpha)*sinf(beta)*sinf(gamma)+cosf(alpha)*cosf(gamma),   -sinf(alpha)*cosf(beta),
+                -cosf(alpha)*sinf(beta)*cosf(gamma)+sinf(alpha)*sinf(gamma),  cosf(alpha)*sinf(beta)*sinf(gamma)+sinf(alpha)*cosf(gamma),    cosf(alpha)*cosf(beta);
+
+        thrust::device_ptr<Eigen::Vector3f> dev_scan = thrust::device_pointer_cast(_scan);
+
+        float sum = thrust::transform_reduce(thrust::device, dev_scan, dev_scan+_scan_size, compute_point_score(rotation), 0.0, thrust::plus<float>());
+        float score = float(sum/_scan_size);
+        return score;
+    }
+};
+
+
+void kernelTest(const std::vector<Eigen::Vector3f>& scan)
+{
+    int pose_num = 100;
+    Eigen::Matrix<float, 6, 1> pose;
+    pose<<0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+    thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses(pose_num);
+    thrust::fill(thrust::device, poses.begin(), poses.end(), pose);
+    cudaDeviceSynchronize();
+
+    thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
+    int scan_size = scan.size();
+
+    // create thrust vector of thrust vector
+    thrust::device_vector<Eigen::Vector3f> trans_scans[pose_num];
+
+    thrust::device_vector<float> scores(pose_num);
+
+    thrust::transform(thrust::device, poses.begin(), poses.end(), scores.begin(), compute_cloud_score(thrust::raw_pointer_cast(dev_scan.data()), scan_size));
+
+
+}
+
+
+
 void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
                         const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
                         const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,

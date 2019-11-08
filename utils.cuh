@@ -17,3 +17,5 @@ void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vec
                         const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
                         const float& map_resolution);
 
+void kernelTest(const std::vector<Eigen::Vector3f>& scan);
+
