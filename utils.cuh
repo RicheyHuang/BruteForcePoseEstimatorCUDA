@@ -13,6 +13,7 @@
 #include <thrust/extrema.h>
 
 void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
-                        const int& linear_window_size, const float& linear_step_size, const int& angular_window_size, const float& angular_step_size,
+                        const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                        const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
                         const float& map_resolution);
 

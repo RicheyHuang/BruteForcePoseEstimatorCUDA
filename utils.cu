@@ -130,12 +130,13 @@ struct get_pose
 {
     const int _offset;
     const float _resolution;
-    explicit get_pose(const int& offset, const float& resolution):_offset(offset), _resolution(resolution){}
+    const float _init_pose;
+    explicit get_pose(const int& offset, const float& resolution, const float& init_pose):_offset(offset), _resolution(resolution), _init_pose(init_pose){}
 
     __host__ __device__
     float operator()(int index)
     {
-        return float((index-_offset)*_resolution);
+        return float((index-_offset)*_resolution+_init_pose);
     }
 };
 
@@ -149,8 +150,12 @@ struct get_6dof
     const int _loop_size_z;
 
 
-    const float* _angles;
-    const float* _displacements;
+    const float* _roll_angles;
+    const float* _pitch_angles;
+    const float* _yaw_angles;
+    const float* _x_displacements;
+    const float* _y_displacements;
+    const float* _z_displacements;
 
 
     explicit get_6dof(const int& loop_size_rpyxyz,
@@ -159,35 +164,45 @@ struct get_6dof
                       const int& loop_size_xyz,
                       const int& loop_size_yz,
                       const int& loop_size_z,
-                      const float* angles,
-                      const float* displacements):
+                      const float* roll_angles,
+                      const float* pitch_angles,
+                      const float* yaw_angles,
+                      const float* x_displacements,
+                      const float* y_displacements,
+                      const float* z_displacements
+                      ):
                       _loop_size_rpyxyz(loop_size_rpyxyz),
                       _loop_size_pyxyz(loop_size_pyxyz),
                       _loop_size_yxyz(loop_size_yxyz),
                       _loop_size_xyz(loop_size_xyz),
                       _loop_size_yz(loop_size_yz),
                       _loop_size_z(loop_size_z),
-                      _angles(angles),
-                      _displacements(displacements){}
+                      _roll_angles(roll_angles),
+                      _pitch_angles(pitch_angles),
+                      _yaw_angles(yaw_angles),
+                      _x_displacements(x_displacements),
+                      _y_displacements(y_displacements),
+                      _z_displacements(z_displacements)
+                      {}
 
     __host__ __device__
     Eigen::Matrix<float, 6, 1> operator()(int pose_index)
     {
         Eigen::Matrix<float, 6, 1> pose;
 
-        pose(0, 0) = _angles[int(pose_index/_loop_size_pyxyz)];
-        pose(1, 0) = _angles[int(pose_index%_loop_size_pyxyz/_loop_size_yxyz)];
-        pose(2, 0) = _angles[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz/_loop_size_xyz)];
-        pose(3, 0) = _displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz/_loop_size_yz)];
-        pose(4, 0) = _displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz%_loop_size_yz/_loop_size_z)];
-        pose(5, 0) = _displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz%_loop_size_yz%_loop_size_z)];
+        pose(0, 0) = _roll_angles[int(pose_index/_loop_size_pyxyz)];
+        pose(1, 0) = _pitch_angles[int(pose_index%_loop_size_pyxyz/_loop_size_yxyz)];
+        pose(2, 0) = _yaw_angles[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz/_loop_size_xyz)];
+        pose(3, 0) = _x_displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz/_loop_size_yz)];
+        pose(4, 0) = _y_displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz%_loop_size_yz/_loop_size_z)];
+        pose(5, 0) = _z_displacements[int(pose_index%_loop_size_pyxyz%_loop_size_yxyz%_loop_size_xyz%_loop_size_yz%_loop_size_z)];
 
         return pose;
     }
 };
 
 
-thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& linear_winsize, const float& linear_step, const int& angular_winsize, const float& angular_step)
+thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const Eigen::Vector3f& angular_init_pose, const int& angular_winsize, const float& angular_step, const Eigen::Vector3f& linear_init_pose, const int& linear_winsize, const float& linear_step)
 {
     float time;
     cudaEvent_t start, stop;
@@ -195,21 +210,47 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& line
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
 
-    int linear_space_size = 2*linear_winsize+1;
-    thrust::device_vector<int> linear_indices(linear_space_size);
-    thrust::sequence(linear_indices.begin(), linear_indices.end());
-    cudaDeviceSynchronize();
-    thrust::device_vector<float> displacements(linear_space_size);
-    thrust::transform(linear_indices.begin(), linear_indices.end(), displacements.begin(), get_pose(linear_winsize, linear_step));
-    cudaDeviceSynchronize();
-
     int angular_space_size = 2*angular_winsize+1;
     thrust::device_vector<int> angular_indices(angular_space_size);
     thrust::sequence(angular_indices.begin(), angular_indices.end());
     cudaDeviceSynchronize();
-    thrust::device_vector<float> angles(angular_space_size);
-    thrust::transform(angular_indices.begin(), angular_indices.end(), angles.begin(), get_pose(angular_winsize, angular_step));
+
+    float roll = angular_init_pose[0];
+    thrust::device_vector<float> roll_angles(angular_space_size);
+    thrust::transform(angular_indices.begin(), angular_indices.end(), roll_angles.begin(), get_pose(angular_winsize, angular_step, roll));
     cudaDeviceSynchronize();
+
+    float pitch = angular_init_pose[1];
+    thrust::device_vector<float> pitch_angles(angular_space_size);
+    thrust::transform(angular_indices.begin(), angular_indices.end(), pitch_angles.begin(), get_pose(angular_winsize, angular_step, pitch));
+    cudaDeviceSynchronize();
+
+    float yaw = angular_init_pose[2];
+    thrust::device_vector<float> yaw_angles(angular_space_size);
+    thrust::transform(angular_indices.begin(), angular_indices.end(), yaw_angles.begin(), get_pose(angular_winsize, angular_step, yaw));
+    cudaDeviceSynchronize();
+
+
+    int linear_space_size = 2*linear_winsize+1;
+    thrust::device_vector<int> linear_indices(linear_space_size);
+    thrust::sequence(linear_indices.begin(), linear_indices.end());
+    cudaDeviceSynchronize();
+
+    float x = linear_init_pose[0];
+    thrust::device_vector<float> x_displacements(linear_space_size);
+    thrust::transform(linear_indices.begin(), linear_indices.end(), x_displacements.begin(), get_pose(linear_winsize, linear_step, x));
+    cudaDeviceSynchronize();
+
+    float y = linear_init_pose[1];
+    thrust::device_vector<float> y_displacements(linear_space_size);
+    thrust::transform(linear_indices.begin(), linear_indices.end(), y_displacements.begin(), get_pose(linear_winsize, linear_step, y));
+    cudaDeviceSynchronize();
+
+    float z = linear_init_pose[2];
+    thrust::device_vector<float> z_displacements(linear_space_size);
+    thrust::transform(linear_indices.begin(), linear_indices.end(), z_displacements.begin(), get_pose(linear_winsize, linear_step, z));
+    cudaDeviceSynchronize();
+
 
     int pose_num = int(pow(angular_space_size,3)*pow(linear_space_size, 3));
     thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses(pose_num);
@@ -225,8 +266,15 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& line
     int loop_size_yz = int(pow(linear_space_size, 2));
     int loop_size_z = int(linear_space_size);
 
-    thrust::transform(thrust::device, pose_indices.begin(), pose_indices.end(), poses.begin(), get_6dof(loop_size_rpyxyz, loop_size_pyxyz, loop_size_yxyz, loop_size_xyz,
-                      loop_size_yz, loop_size_z, thrust::raw_pointer_cast(&angles[0]), thrust::raw_pointer_cast(&displacements[0])));
+    thrust::transform(thrust::device, pose_indices.begin(), pose_indices.end(), poses.begin(),
+             get_6dof(loop_size_rpyxyz, loop_size_pyxyz, loop_size_yxyz, loop_size_xyz, loop_size_yz, loop_size_z,
+                      thrust::raw_pointer_cast(&roll_angles[0]),
+                      thrust::raw_pointer_cast(&pitch_angles[0]),
+                      thrust::raw_pointer_cast(&yaw_angles[0]),
+                      thrust::raw_pointer_cast(&x_displacements[0]),
+                      thrust::raw_pointer_cast(&y_displacements[0]),
+                      thrust::raw_pointer_cast(&z_displacements[0])
+                     ));
     cudaDeviceSynchronize();
 
     cudaEventRecord(stop, 0);
@@ -238,10 +286,11 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& line
 }
 
 void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
-                        const int& linear_window_size, const float& linear_step_size, const int& angular_window_size, const float& angular_step_size,
+                        const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                        const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
                         const float& map_resolution)
 {
-    thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses = GeneratePoses(linear_window_size, linear_step_size, angular_window_size, angular_step_size);
+    thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses = GeneratePoses(angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size);
 
     float time;
     cudaEvent_t start, stop;
@@ -299,7 +348,7 @@ void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vec
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to compute opt pose: %3.1f ms \n", time);
+    printf("Time to compute optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - score_bins.begin();
 

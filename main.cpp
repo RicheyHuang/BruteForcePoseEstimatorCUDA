@@ -57,13 +57,20 @@ int main(){
 
     std::cout<<"Data loaded."<<std::endl;
 
-    float linear_step_size = 0.02;
-    int linear_window_size = int(std::round(0.04/linear_step_size));
+    float angular_range = 0.04;
     float angular_step_size = 0.01;
-    int angular_window_size = int(std::round(0.04/angular_step_size));
-    float map_resolution = 0.02;
+    int angular_window_size = int(std::round(angular_range/angular_step_size));
 
-    ComputeOptimalPose(scan, map, linear_window_size, linear_step_size, angular_window_size, angular_step_size, map_resolution);
+    float linear_range = 0.04;
+    float linear_step_size = 0.02;
+    int linear_window_size = int(std::round(linear_range/linear_step_size));
+
+
+    float map_resolution = 0.02;
+    Eigen::Vector3f linear_init_pose = {0, 0, 0};
+    Eigen::Vector3f angular_init_pose = {0, 0, 0};
+
+    ComputeOptimalPose(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
 
     return 0;
 }
