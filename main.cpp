@@ -49,7 +49,9 @@ int main(){
     std::string map_file_path = "../map.txt";
     std::string scan_file_path = "../scan.txt";
 
+    // map: x, y, z, odds
     std::vector<Eigen::Vector4f> map;
+    // scan: x, y, z
     std::vector<Eigen::Vector3f> scan;
 
     ReadMap(map, map_file_path);
