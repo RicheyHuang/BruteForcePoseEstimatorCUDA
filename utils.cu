@@ -49,17 +49,17 @@ struct point_transform
         Eigen::Vector4f homo_transformed_point =  homo_point[0] * transform.col(0) + homo_point[1] * transform.col(1) + homo_point[2] * transform.col(2) + homo_point[3] * transform.col(3);
 
         Eigen::Vector3f transformed_point;
-        transformed_point << homo_transformed_point[0]/_resolution, homo_transformed_point[1]/_resolution, homo_transformed_point[2]/_resolution;
+        transformed_point << roundf(homo_transformed_point[0]/_resolution), roundf(homo_transformed_point[1]/_resolution), roundf(homo_transformed_point[2]/_resolution);
         return transformed_point;
     }
 };
 
-struct eigen_less_than
+struct sort_map_point
 {
     __host__ __device__
-    bool operator()(const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
+    bool operator()(const Eigen::Vector4f& lhs, const Eigen::Vector4f& rhs)
     {
-        return (lhs[0]<rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]<rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]<rhs[2]);
+        return (lhs[0]<rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]<rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]<rhs[2])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&fabs(lhs[2]-rhs[2])<1e-6&&lhs[3]<rhs[3]);
     }
 };
 
@@ -74,14 +74,18 @@ __host__ __device__ bool operator>(const Eigen::Vector3f& lhs, const Eigen::Vect
     return (lhs[0]>rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]>rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]>rhs[2]);
 }
 
-__host__ __device__ int BinarySearchRecursive(const Eigen::Vector3f* points, int low, int high, Eigen::Vector3f point)
+__host__ __device__ int BinarySearchRecursive(const Eigen::Vector4f* points, int low, int high, Eigen::Vector3f point)
 {
     if (low > high)
         return -1;
     int mid = low + (high - low) / 2;
-    if (points[mid] == point)
+
+    Eigen::Vector3f mid_point;
+    mid_point << points[mid][0], points[mid][1], points[mid][2];
+
+    if (mid_point == point)
         return mid;
-    else if (points[mid] > point)
+    else if (mid_point > point)
         return BinarySearchRecursive(points, low, mid - 1, point);
     else
         return BinarySearchRecursive(points, mid + 1, high, point);
@@ -89,10 +93,10 @@ __host__ __device__ int BinarySearchRecursive(const Eigen::Vector3f* points, int
 
 struct match
 {
-    const Eigen::Vector3f* _map;
+    const Eigen::Vector4f* _map;
     const int _size;
 
-    explicit match(Eigen::Vector3f* map, int size):_map(map), _size(size){}
+    explicit match(Eigen::Vector4f* map, int size):_map(map), _size(size){}
 
     __host__ __device__
     float operator()(const Eigen::Vector3f& point)
@@ -104,7 +108,7 @@ struct match
         }
         else
         {
-            return 1.0;
+            return _map[idx][3];
         }
     }
 };
@@ -122,17 +126,16 @@ struct compute_score
 };
 
 
-struct get_unit_pose
+struct get_pose
 {
     const int _offset;
     const float _resolution;
-    explicit get_unit_pose(const int& offset, const float& resolution):_offset(offset), _resolution(resolution){}
+    explicit get_pose(const int& offset, const float& resolution):_offset(offset), _resolution(resolution){}
 
     __host__ __device__
     float operator()(int index)
     {
         return float((index-_offset)*_resolution);
-//        return float(index);
     }
 };
 
@@ -197,7 +200,7 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& line
     thrust::sequence(linear_indices.begin(), linear_indices.end());
     cudaDeviceSynchronize();
     thrust::device_vector<float> displacements(linear_space_size);
-    thrust::transform(linear_indices.begin(), linear_indices.end(), displacements.begin(), get_unit_pose(linear_winsize, linear_step));
+    thrust::transform(linear_indices.begin(), linear_indices.end(), displacements.begin(), get_pose(linear_winsize, linear_step));
     cudaDeviceSynchronize();
 
     int angular_space_size = 2*angular_winsize+1;
@@ -205,7 +208,7 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& line
     thrust::sequence(angular_indices.begin(), angular_indices.end());
     cudaDeviceSynchronize();
     thrust::device_vector<float> angles(angular_space_size);
-    thrust::transform(angular_indices.begin(), angular_indices.end(), angles.begin(), get_unit_pose(angular_winsize, angular_step));
+    thrust::transform(angular_indices.begin(), angular_indices.end(), angles.begin(), get_pose(angular_winsize, angular_step));
     cudaDeviceSynchronize();
 
     int pose_num = int(pow(angular_space_size,3)*pow(linear_space_size, 3));
@@ -229,14 +232,14 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const int& line
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate pose:  %3.1f ms \n", time);
+    printf("Time to generate pose: %3.1f ms \n", time);
 
     return poses;
 }
 
-int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector3f>& map,
-                    const int& linear_window_size, const float& linear_step_size, const int& angular_window_size, const float& angular_step_size,
-                    const float& map_resolution)
+void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                        const int& linear_window_size, const float& linear_step_size, const int& angular_window_size, const float& angular_step_size,
+                        const float& map_resolution)
 {
     thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses = GeneratePoses(linear_window_size, linear_step_size, angular_window_size, angular_step_size);
 
@@ -250,12 +253,12 @@ int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& scan, const std::vector<
     thrust::transform(thrust::device, poses.begin(), poses.end(), transforms.begin(), get_transform());
     cudaDeviceSynchronize();
 
-    std::cout<<"pose num:"<<transforms.size()<<std::endl;
+    std::cout<<"Number of generated poses: "<<transforms.size()<<std::endl;
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate transforms:  %3.1f ms \n", time);
+    printf("Time to generate transforms: %3.1f ms \n", time);
 
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -271,9 +274,13 @@ int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& scan, const std::vector<
     int map_size = map.size();
     int scan_size = scan.size();
 
-    thrust::device_vector<Eigen::Vector3f> dev_map = map;
-    thrust::sort(thrust::device, dev_map.begin(), dev_map.end(), eigen_less_than());
+    thrust::device_vector<Eigen::Vector4f> dev_map = map;
+    thrust::sort(thrust::device, dev_map.begin(), dev_map.end(), sort_map_point());
     cudaDeviceSynchronize();
+
+
+    std::cout<<"Number of points in scan: "<<scan_size<<std::endl;
+    std::cout<<"Number of points in map: "<<map_size<<std::endl;
 
     for(int i = 0 ; i < scan.size(); i++)
     {
@@ -292,17 +299,18 @@ int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& scan, const std::vector<
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to compute opt pose:  %3.1f ms \n", time);
+    printf("Time to compute opt pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - score_bins.begin();
 
-    std::cout<<"opt pose index: "<<opt_pose_idx<<std::endl;
-    std::cout<<"opt pose score: "<<score_bins[opt_pose_idx]<<std::endl;
+    std::cout<<"Optimal Pose Index: "<<opt_pose_idx<<std::endl;
+    std::cout<<"Optimal Pose Score: "<<score_bins[opt_pose_idx]<<std::endl;
 
     thrust::host_vector<Eigen::Matrix<float, 6, 1> > host_poses = poses;
-    std::cout<<"opt pose: "<<host_poses[opt_pose_idx][0]<<", "<<host_poses[opt_pose_idx][1]<<", "<<host_poses[opt_pose_idx][2]<<", "
-                           <<host_poses[opt_pose_idx][3]<<", "<<host_poses[opt_pose_idx][4]<<", "<<host_poses[opt_pose_idx][5]<<std::endl;
-
-    return opt_pose_idx;
-
+    std::cout<<"Optimal Pose: (roll)"<<host_poses[opt_pose_idx][0]<<" rad, (pitch)"
+                                     <<host_poses[opt_pose_idx][1]<<" rad, (yaw)"
+                                     <<host_poses[opt_pose_idx][2]<<" rad, (x)"
+                                     <<host_poses[opt_pose_idx][3]<<" m, (y)"
+                                     <<host_poses[opt_pose_idx][4]<<" m, (z)"
+                                     <<host_poses[opt_pose_idx][5]<<" m"<<std::endl;
 }

@@ -12,7 +12,7 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/extrema.h>
 
-int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector3f>& map,
-                    const int& linear_window_size, const float& linear_step_size, const int& angular_window_size, const float& angular_step_size,
-                    const float& map_resolution);
+void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                        const int& linear_window_size, const float& linear_step_size, const int& angular_window_size, const float& angular_step_size,
+                        const float& map_resolution);
 
