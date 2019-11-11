@@ -78,7 +78,9 @@ int main(){
                                      <<linear_init_pose[1]<<" m, (z)"
                                      <<linear_init_pose[2]<<" m"<<std::endl;
 
-    ComputeOptimalPose(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+//    ComputeOptimalPoseV1(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+
+    ComputeOptimalPoseV2(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
 
     return 0;
 }
