@@ -82,5 +82,7 @@ int main(){
 
     ComputeOptimalPoseV2(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
 
+//    ComputeOptimalPoseTest(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+
     return 0;
 }
