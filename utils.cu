@@ -1,6 +1,5 @@
 #include "utils.cuh"
 
-
 struct get_transform
 {
     __host__ __device__
@@ -32,7 +31,6 @@ struct get_transform
     }
 };
 
-
 struct point_transform
 {
     const Eigen::Vector3f _point;
@@ -62,7 +60,6 @@ struct sort_map_point
         return (lhs[0]<rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]<rhs[1])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]<rhs[2])||((lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&fabs(lhs[2]-rhs[2])<1e-6&&lhs[3]<rhs[3]);
     }
 };
-
 
 __host__ __device__ bool operator==(const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
 {
@@ -124,7 +121,6 @@ struct compute_score
         return float(sum/float(_size));
     }
 };
-
 
 struct get_pose
 {
@@ -200,7 +196,6 @@ struct get_6dof
         return pose;
     }
 };
-
 
 thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const Eigen::Vector3f& angular_init_pose, const int& angular_winsize, const float& angular_step, const Eigen::Vector3f& linear_init_pose, const int& linear_winsize, const float& linear_step)
 {
@@ -285,138 +280,89 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const Eigen::Ve
     return poses;
 }
 
-
-// create thrust vector of thrust vector
-//thrust::device_vector<Eigen::Vector3f> trans_scans[pose_num];
-//trans_scans[0] = thrust::device_vector<Eigen::Vector3f>(scan_size);
-
-// nested kernel example
-//struct aFuntor : public thrust::unary_function<int, int>
-//{
-//    aFuntor(int* av__, int* bv__, const int& N__) : av_(av__), bv_(bv__), N_(N__) {};
-//
-//    __host__ __device__
-//    int operator()(const int& idx)
-//    {
-//
-//        thrust::device_ptr<int> av_dpt = thrust::device_pointer_cast(av_);
-//
-//        int res = thrust::reduce(thrust::device, av_dpt, av_dpt+N_);
-//
-//        return res;
-//    }
-//
-//    int* av_;
-//    int* bv_;
-//    int N_;
-//};
-//
-//
-//int main(void)
-//{
-//    int N = 5;
-//    std::vector<int> av = {0,1,3,5};
-//    std::vector<int> bv = {0,10,20,30};
-//    thrust::device_vector<int> av_d(N);
-//    thrust::device_vector<int> bv_d(N);
-//    av_d = av; bv_d = bv;
-//
-//    // initial value of the reduction
-//    int init=0;
-//
-//    // binary operations
-//    thrust::plus<int>        bin_op;
-//
-//    int res =
-//            thrust::transform_reduce(thrust::counting_iterator<int>(0),
-//                                     thrust::counting_iterator<int>(N-1),
-//                                     aFuntor(thrust::raw_pointer_cast(av_d.data()),
-//                                             thrust::raw_pointer_cast(bv_d.data()),
-//                                             N),
-//                                     init,
-//                                     bin_op);
-//
-//    std::cout << "result is: " << res << std::endl;
-//    return 0;
-//}
-
-
-
 struct compute_point_score:public thrust::unary_function<Eigen::Vector3f, float> // <arg, result>
 {
-    Eigen::Matrix3f _rotation;
+    Eigen::Matrix4f _transform;
+    int _map_size;
+    float _map_resolution;
+    Eigen::Vector4f* _map;
 
-    explicit compute_point_score(Eigen::Matrix3f rotation):_rotation(rotation){}
+    explicit compute_point_score(Eigen::Matrix4f transform, Eigen::Vector4f* map, int& map_size, float& map_resolution):_transform(transform), _map(map), _map_size(map_size), _map_resolution(map_resolution){}
 
     __host__ __device__
 
     float operator()(Eigen::Vector3f& point)
     {
-        Eigen::Vector3f trans_point = point[0] * _rotation.col(0) + point[1] * _rotation.col(1) + point[2] * _rotation.col(2);
-        float score = trans_point[3];
-        return score;
+        float score;
+
+        Eigen::Vector4f homo_point;
+        homo_point << point[0], point[1], point[2], 1.0;
+        Eigen::Vector4f homo_transformed_point =  homo_point[0] * _transform.col(0) + homo_point[1] * _transform.col(1) + homo_point[2] * _transform.col(2) + homo_point[3] * _transform.col(3);
+        Eigen::Vector3f transformed_point;
+        transformed_point << roundf(homo_transformed_point[0]/_map_resolution), roundf(homo_transformed_point[1]/_map_resolution), roundf(homo_transformed_point[2]/_map_resolution);
+
+        Eigen::Vector3f mid_point;
+
+        if (_map_size <= 0)
+        {
+            return 0.0;
+        }
+        else
+        {
+            int low = 0;
+            int high = _map_size - 1;
+            while (low <= high)
+            {
+                int mid = low + (high - low) / 2;
+                mid_point << _map[mid][0], _map[mid][1], _map[mid][2];
+
+                if (mid_point == transformed_point)
+                {
+                    score = _map[mid][3];
+                    return score;
+                }
+                else if (mid_point > transformed_point)
+                {
+                    high = mid - 1;
+                }
+                else
+                {
+                    low = mid + 1;
+                }
+            }
+            return 0.0;
+        }
     }
 };
 
-
-
-struct compute_cloud_score:public thrust::unary_function<Eigen::Matrix<float, 6, 1>, float> // <arg, result>
+struct compute_cloud_score:public thrust::unary_function<Eigen::Matrix4f, float> // <arg, result>
 {
     Eigen::Vector3f* _scan;
     int _scan_size;
 
-    compute_cloud_score(Eigen::Vector3f* scan, int& scan_size):_scan(scan), _scan_size(scan_size){}
+    Eigen::Vector4f* _map;
+    int _map_size;
+    float _map_resolution;
+
+
+    compute_cloud_score(Eigen::Vector3f* scan, int& scan_size, Eigen::Vector4f* map, int& map_size, float& map_resolution):_scan(scan), _scan_size(scan_size), _map(map), _map_size(map_size), _map_resolution(map_resolution){}
 
     __host__ __device__
-    float operator()(const Eigen::Matrix<float, 6, 1>& pose)
+    float operator()(const Eigen::Matrix4f& transform)
     {
-        float alpha = pose[0];
-        float beta  = pose[1];
-        float gamma = pose[2];
-
-        Eigen::Matrix3f rotation;
-
-        rotation << cosf(beta)*cosf(gamma),                                     -cosf(beta)*sinf(gamma),                                        sinf(beta),
-                sinf(alpha)*sinf(beta)*cosf(gamma)+cosf(alpha)*sinf(gamma), -sinf(alpha)*sinf(beta)*sinf(gamma)+cosf(alpha)*cosf(gamma),   -sinf(alpha)*cosf(beta),
-                -cosf(alpha)*sinf(beta)*cosf(gamma)+sinf(alpha)*sinf(gamma),  cosf(alpha)*sinf(beta)*sinf(gamma)+sinf(alpha)*cosf(gamma),    cosf(alpha)*cosf(beta);
-
         thrust::device_ptr<Eigen::Vector3f> dev_scan = thrust::device_pointer_cast(_scan);
 
-        float sum = thrust::transform_reduce(thrust::device, dev_scan, dev_scan+_scan_size, compute_point_score(rotation), 0.0, thrust::plus<float>());
+        float sum = thrust::transform_reduce(thrust::device, dev_scan, dev_scan+_scan_size, compute_point_score(transform, thrust::raw_pointer_cast(_map), _map_size, _map_resolution), 0.0, thrust::plus<float>());
+
         float score = float(sum/_scan_size);
         return score;
     }
 };
 
-
-void kernelTest(const std::vector<Eigen::Vector3f>& scan)
-{
-    int pose_num = 100;
-    Eigen::Matrix<float, 6, 1> pose;
-    pose<<0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-    thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses(pose_num);
-    thrust::fill(thrust::device, poses.begin(), poses.end(), pose);
-    cudaDeviceSynchronize();
-
-    thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
-    int scan_size = scan.size();
-
-    // create thrust vector of thrust vector
-    thrust::device_vector<Eigen::Vector3f> trans_scans[pose_num];
-
-    thrust::device_vector<float> scores(pose_num);
-
-    thrust::transform(thrust::device, poses.begin(), poses.end(), scores.begin(), compute_cloud_score(thrust::raw_pointer_cast(dev_scan.data()), scan_size));
-
-
-}
-
-
-
-void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
-                        const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
-                        const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
-                        const float& map_resolution)
+void ComputeOptimalPoseV1(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                          const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                          const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
+                          const float& map_resolution)
 {
     thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses = GeneratePoses(angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size);
 
@@ -490,4 +436,71 @@ void ComputeOptimalPose(const std::vector<Eigen::Vector3f>& scan, const std::vec
                                      <<host_poses[opt_pose_idx][3]<<" m, (y)"
                                      <<host_poses[opt_pose_idx][4]<<" m, (z)"
                                      <<host_poses[opt_pose_idx][5]<<" m"<<std::endl;
+}
+
+void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                          const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                          const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
+                          float& map_resolution)
+{
+    thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses = GeneratePoses(angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size);
+    int pose_num = poses.size();
+
+    float time;
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+
+    thrust::device_vector<Eigen::Matrix4f> transforms(pose_num);
+    thrust::transform(thrust::device, poses.begin(), poses.end(), transforms.begin(), get_transform());
+    cudaDeviceSynchronize();
+
+    std::cout<<"Number of generated poses: "<<transforms.size()<<std::endl;
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    printf("Time to generate transforms: %3.1f ms \n", time);
+
+
+    thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
+    int scan_size = scan.size();
+
+    thrust::device_vector<Eigen::Vector4f> dev_map = map;
+    int map_size = map.size();
+
+    thrust::sort(thrust::device, dev_map.begin(), dev_map.end(), sort_map_point());
+    cudaDeviceSynchronize();
+
+    std::cout<<"Number of points in scan: "<<scan_size<<std::endl;
+    std::cout<<"Number of points in map: "<<map_size<<std::endl;
+
+//    create thrust vector of thrust vector
+//    thrust::device_vector<Eigen::Vector3f> trans_scans[pose_num];
+
+    thrust::device_vector<float> scores(pose_num);
+    thrust::transform(thrust::device, transforms.begin(), transforms.end(), scores.begin(), compute_cloud_score(thrust::raw_pointer_cast(dev_scan.data()), scan_size,
+                                                                                                                thrust::raw_pointer_cast(dev_map.data()), map_size, map_resolution));
+    cudaDeviceSynchronize();
+
+    thrust::device_vector<float>::iterator max_element_iter = thrust::max_element(scores.begin(), scores.end());
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    printf("Time to compute optimal pose: %3.1f ms \n", time);
+
+    int opt_pose_idx = max_element_iter - scores.begin();
+
+    std::cout<<"Optimal Pose Index: "<<opt_pose_idx<<std::endl;
+    std::cout<<"Optimal Pose Score: "<<scores[opt_pose_idx]<<std::endl;
+
+    thrust::host_vector<Eigen::Matrix<float, 6, 1> > host_poses = poses;
+    std::cout<<"Optimal Pose: (roll)"<<host_poses[opt_pose_idx][0]<<" rad, (pitch)"
+             <<host_poses[opt_pose_idx][1]<<" rad, (yaw)"
+             <<host_poses[opt_pose_idx][2]<<" rad, (x)"
+             <<host_poses[opt_pose_idx][3]<<" m, (y)"
+             <<host_poses[opt_pose_idx][4]<<" m, (z)"
+             <<host_poses[opt_pose_idx][5]<<" m"<<std::endl;
 }
