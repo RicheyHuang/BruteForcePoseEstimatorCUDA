@@ -275,7 +275,7 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const Eigen::Ve
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate pose: %3.1f ms \n", time);
+    printf("Generate pose: %3.1f ms \n", time);
 
     return poses;
 }
@@ -544,7 +544,7 @@ void ComputeOptimalPoseV1(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate transforms: %3.1f ms \n", time);
+    printf("Generate transformations: %3.1f ms \n", time);
 
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -585,7 +585,7 @@ void ComputeOptimalPoseV1(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to compute optimal pose: %3.1f ms \n", time);
+    printf("Calculate optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - score_bins.begin();
 
@@ -624,7 +624,7 @@ void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate transforms: %3.1f ms \n", time);
+    printf("Generate transformations: %3.1f ms \n", time);
 
 
     thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
@@ -656,7 +656,7 @@ void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to compute optimal pose: %3.1f ms \n", time);
+    printf("Calculate optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - scores.begin();
 
@@ -694,7 +694,7 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate transforms: %3.1f ms \n", time);
+    printf("Generate transformations: %3.1f ms \n", time);
 
     thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
     int scan_size = scan.size();
@@ -725,7 +725,7 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate hashmap: %3.1f ms \n", time);
+//    printf("Generate hashmap: %3.1f ms \n", time);
 
     std::cout<<"Number of points in scan: "<<scan_size<<std::endl;
     std::cout<<"Number of points in map: "<<map_size<<std::endl;
@@ -746,7 +746,7 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to compute optimal pose: %3.1f ms \n", time);
+    printf("Calculate optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - scores.begin();
     std::cout<<"Optimal Pose Index: "<<opt_pose_idx<<std::endl;
@@ -784,7 +784,7 @@ void ComputeOptimalPoseTest(const std::vector<Eigen::Vector3f>& scan, const std:
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to generate transforms: %3.1f ms \n", time);
+    printf("Generate transformations: %3.1f ms \n", time);
 
 
     thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
@@ -816,7 +816,7 @@ void ComputeOptimalPoseTest(const std::vector<Eigen::Vector3f>& scan, const std:
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
-    printf("Time to compute optimal pose: %3.1f ms \n", time);
+    printf("Calculate optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - scores.begin();
 
