@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdio.h>
+#include <float.h>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <host_defines.h>
@@ -11,23 +12,25 @@
 #include <thrust/execution_policy.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/extrema.h>
+#include <thrust/pair.h>
 
-class Rigid3f
-{
-public:
-    Rigid3f()
-    {
-        _translation = Eigen::Vector3f(0, 0, 0);
-        _rotation = Eigen::Vector3f(0, 0, 0);
-    }
-    Rigid3f(const Eigen::Vector3f& translation, const Eigen::Vector3f& rotation)
-    {
-        _translation = translation;
-        _rotation = rotation;
-    }
+void ComputeOptimalPoseV1(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                          const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                          const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
+                          const float& map_resolution);
 
-    Eigen::Vector3f _translation;
-    Eigen::Vector3f _rotation;
-};
+void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                          const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                          const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
+                          float& map_resolution);
 
-int GetOptPoseIndex(const std::vector<Eigen::Vector3f>& submap, const std::vector<Eigen::Vector3f>& map, const std::vector<Rigid3f>& poses);
+void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                          const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                          const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
+                          float& map_resolution);
+
+void ComputeOptimalPoseTest(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
+                            const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
+                            const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
+                            float& map_resolution);
+
