@@ -1,9 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include <unordered_set>
-#include <bitset>
 #include "utils.cuh"
+#include <chrono>
+#include <ctime>
 
 
 void ReadScan(std::vector<Eigen::Vector3f>& scan, std::string& file_path){
@@ -78,13 +78,26 @@ int main(){
                                      <<linear_init_pose[1]<<" m, (z)"
                                      <<linear_init_pose[2]<<" m"<<std::endl;
 
-//    ComputeOptimalPoseV1(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto S1 = std::chrono::high_resolution_clock::now();
+    ComputeOptimalPoseV1(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto E1 = std::chrono::high_resolution_clock::now();
+    std::cout<<"V1 time: "<<std::chrono::duration<double, std::milli>(E1-S1).count()<<"ms"<<std::endl;
 
-//    ComputeOptimalPoseV2(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto S2 = std::chrono::high_resolution_clock::now();
+    ComputeOptimalPoseV2(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto E2 = std::chrono::high_resolution_clock::now();
+    std::cout<<"V2 time: "<<std::chrono::duration<double, std::milli>(E2-S2).count()<<"ms"<<std::endl;
 
+    auto S3 = std::chrono::high_resolution_clock::now();
     ComputeOptimalPoseV3(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto E3 = std::chrono::high_resolution_clock::now();
+    std::cout<<"V3 time: "<<std::chrono::duration<double, std::milli>(E3-S3).count()<<"ms"<<std::endl;
 
-//    ComputeOptimalPoseTest(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto S4 = std::chrono::high_resolution_clock::now();
+    ComputeOptimalPoseV4(scan, map, angular_init_pose, angular_window_size, angular_step_size, linear_init_pose, linear_window_size, linear_step_size, map_resolution);
+    auto E4 = std::chrono::high_resolution_clock::now();
+    std::cout<<"V4 time: "<<std::chrono::duration<double, std::milli>(E4-S4).count()<<"ms"<<std::endl;
+
 
     return 0;
 }
