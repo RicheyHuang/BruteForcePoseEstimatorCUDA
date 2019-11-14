@@ -1,5 +1,6 @@
 #include "utils.cuh"
 
+
 const float NULL_ODDS = 10.0;
 const float ODDS_LIMIT = 5.0;
 //V1
@@ -169,6 +170,7 @@ thrust::device_vector<Eigen::Matrix<float, 6, 1> > GeneratePoses(const Eigen::Ve
     return poses;
 }
 
+
 struct get_transform
 {
     __host__ __device__
@@ -186,9 +188,11 @@ struct get_transform
 
         // ZYX order
         transform << cosf(beta)*cosf(gamma),                                     -cosf(beta)*sinf(gamma),                                        sinf(beta),              x,
+
                 sinf(alpha)*sinf(beta)*cosf(gamma)+cosf(alpha)*sinf(gamma), -sinf(alpha)*sinf(beta)*sinf(gamma)+cosf(alpha)*cosf(gamma),   -sinf(alpha)*cosf(beta),  y,
                 -cosf(alpha)*sinf(beta)*cosf(gamma)+sinf(alpha)*sinf(gamma),  cosf(alpha)*sinf(beta)*sinf(gamma)+sinf(alpha)*cosf(gamma),    cosf(alpha)*cosf(beta),  z,
                 0.0,                                                         0.0,                                                           0.0,                     1.0;
+
 
 //        // XYZ order
 //        transform << cosf(beta)*cosf(alpha),     sinf(gamma)*sinf(beta)*cosf(alpha)-cosf(gamma)*sinf(alpha),    cosf(gamma)*sinf(beta)*cosf(alpha)+sinf(gamma)*sinf(alpha), x,
@@ -199,6 +203,7 @@ struct get_transform
         return transform;
     }
 };
+
 
 struct sort_map_point
 {
@@ -213,6 +218,7 @@ struct sort_map_point
 };
 
 struct point_transform
+
 {
     const Eigen::Vector3f _point;
     const float _resolution;
@@ -221,6 +227,7 @@ struct point_transform
             _point(point), _resolution(resolution){}
 
     __host__ __device__
+
     Eigen::Vector3f operator()(const Eigen::Matrix4f& transform)
     {
         Eigen::Vector4f homo_point;
@@ -236,6 +243,7 @@ struct point_transform
                 roundf(homo_transformed_point[1]/_resolution),
                 roundf(homo_transformed_point[2]/_resolution);
         return transformed_point;
+
     }
 };
 
@@ -247,6 +255,8 @@ __host__ __device__ bool operator>(const Eigen::Vector3f& lhs, const Eigen::Vect
 {
     return (lhs[0]>rhs[0])||(fabs(lhs[0]-rhs[0])<1e-6&&lhs[1]>rhs[1])||(fabs(lhs[0]-rhs[0])<1e-6&&fabs(lhs[1]-rhs[1])<1e-6&&lhs[2]>rhs[2]);
 }
+
+
 __host__ __device__ int BinarySearchRecursive(const Eigen::Vector4f* points, int low, int high, Eigen::Vector3f point)
 {
     if (low > high)
@@ -263,6 +273,7 @@ __host__ __device__ int BinarySearchRecursive(const Eigen::Vector4f* points, int
     else
         return BinarySearchRecursive(points, mid + 1, high, point);
 }
+
 struct match
 {
     const Eigen::Vector4f* _map;
@@ -296,6 +307,7 @@ struct compute_score
         return float(sum/float(_size));
     }
 };
+
 
 //V2
 struct compute_point_score:public thrust::unary_function<Eigen::Vector3f, float> // <arg, result>
@@ -409,6 +421,7 @@ struct faster_compute_point_score:public thrust::unary_function<Eigen::Vector3f,
 
     explicit faster_compute_point_score(Eigen::Matrix4f transform, float* map_odds, int& map_size, float& map_resolution):_transform(transform), _map_odds(map_odds), _map_size(map_size), _map_resolution(map_resolution){}
 
+
     __host__ __device__
     float operator()(Eigen::Vector3f& point)
     {
@@ -447,12 +460,14 @@ struct faster_compute_cloud_score:public thrust::unary_function<Eigen::Matrix4f,
     __host__ __device__
     float operator()(const Eigen::Matrix4f& transform)
     {
+
         thrust::device_ptr<Eigen::Vector3f> dev_scan = thrust::device_pointer_cast(_scan);
 
         float sum = thrust::transform_reduce(thrust::device, dev_scan, dev_scan+_scan_size, faster_compute_point_score(transform, thrust::raw_pointer_cast(_map_odds), _map_size, _map_resolution), 0.0, thrust::plus<float>());
 
         float score = float(sum/_scan_size);
         return score;
+
     }
 };
 
@@ -566,10 +581,12 @@ std::vector<int> MinMaxXYZ(thrust::device_vector<Eigen::Vector4f>& dev_map, int 
 
 struct assign_valueV2_
 {
+
     float* _map_odds;
     int* _offset;
     int* _map_length;
     explicit assign_valueV2_(float* map_odds, int* offset, int* map_length):_map_odds(map_odds),_offset(offset),_map_length(map_length){}
+
 
     __host__ __device__
     void operator()(Eigen::Vector4f map_element)
@@ -578,6 +595,7 @@ struct assign_valueV2_
         _map_odds[key] = map_element[3];
     }
 };
+
 
 struct faster_compute_point_scoreV2:public thrust::unary_function<Eigen::Vector3f, float> // <arg, result>
 {
@@ -589,8 +607,10 @@ struct faster_compute_point_scoreV2:public thrust::unary_function<Eigen::Vector3
     int* _map_length;
     int _map_odds_size;
 
+
     explicit faster_compute_point_scoreV2(Eigen::Matrix4f transform, float* map_odds, int& map_size, float& map_resolution, int* offset, int* map_length, int map_odds_size):
             _transform(transform), _map_odds(map_odds), _map_size(map_size), _map_resolution(map_resolution), _offset(offset), _map_length(map_length),_map_odds_size(map_odds_size){}
+
 
     __host__ __device__
     float operator()(Eigen::Vector3f& point)
@@ -638,19 +658,23 @@ struct faster_compute_cloud_scoreV2:public thrust::unary_function<Eigen::Matrix4
     explicit faster_compute_cloud_scoreV2(Eigen::Vector3f* scan, int& scan_size, float* map_odds, int& map_size, float& map_resolution, int* offset, int* map_length, int map_odds_size):
             _scan(scan), _scan_size(scan_size), _map_odds(map_odds), _map_size(map_size), _map_resolution(map_resolution),_offset(offset),_map_length(map_length),_map_odds_size(map_odds_size){}
 
+
     __host__ __device__
     float operator()(const Eigen::Matrix4f& transform)
     {
         thrust::device_ptr<Eigen::Vector3f> dev_scan = thrust::device_pointer_cast(_scan);
 
+
 //        float sum = thrust::transform_reduce(thrust::device, dev_scan, dev_scan+_scan_size, faster_compute_point_score(transform, thrust::raw_pointer_cast(_map_odds), _map_size, _map_resolution), 0.0, thrust::plus<float>());
         float sum = thrust::transform_reduce(thrust::device, dev_scan, dev_scan+_scan_size, faster_compute_point_scoreV2(
                 transform, thrust::raw_pointer_cast(_map_odds), _map_size, _map_resolution,thrust::raw_pointer_cast(_offset),thrust::raw_pointer_cast(_map_length),_map_odds_size), 0.0, thrust::plus<float>());
+
 
         float score = float(sum/_scan_size);
         return score;
     }
 };
+
 
 
 //__host__ __device__ bool operator==(const Eigen::Vector4f& lhs, const Eigen::Vector4f& rhs)
@@ -668,6 +692,7 @@ void ComputeOptimalPoseV1(const std::vector<Eigen::Vector3f>& scan, const std::v
                           const Eigen::Vector3f& angular_init_pose, const int& angular_window_size, const float& angular_step_size,
                           const Eigen::Vector3f& linear_init_pose,  const int& linear_window_size,  const float& linear_step_size,
                           const float& map_resolution)
+
 {
     thrust::device_vector<Eigen::Matrix<float, 6, 1> > poses = GeneratePoses(
             angular_init_pose, angular_window_size, angular_step_size,
@@ -678,6 +703,7 @@ void ComputeOptimalPoseV1(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
+
 
     thrust::device_vector<Eigen::Matrix4f> transforms(poses.size());
     thrust::transform(thrust::device, poses.begin(), poses.end(), transforms.begin(), get_transform());
@@ -767,6 +793,7 @@ void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::v
 
 //    std::cout<<"Number of generated poses: "<<transforms.size()<<std::endl;
 
+
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
@@ -786,12 +813,14 @@ void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::v
     thrust::sort(thrust::device, dev_map.begin(), dev_map.end(), sort_map_point());
     cudaDeviceSynchronize();
 
+
 //    std::cout<<"Number of points in scan: "<<scan_size<<std::endl;
 //    std::cout<<"Number of points in map: "<<map_size<<std::endl;
 
     thrust::device_vector<float> scores(pose_num);
     thrust::transform(thrust::device, transforms.begin(), transforms.end(), scores.begin(), compute_cloud_score(thrust::raw_pointer_cast(dev_scan.data()), scan_size,
                                                                                                                 thrust::raw_pointer_cast(dev_map.data()), map_size, map_resolution));
+
     cudaDeviceSynchronize();
 
     thrust::device_vector<float>::iterator max_element_iter = thrust::max_element(scores.begin(), scores.end());
@@ -799,6 +828,7 @@ void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
+
 //    printf("Time to compute optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - scores.begin();
@@ -813,6 +843,7 @@ void ComputeOptimalPoseV2(const std::vector<Eigen::Vector3f>& scan, const std::v
 //             <<host_poses[opt_pose_idx][3]<<" m, (y)"
 //             <<host_poses[opt_pose_idx][4]<<" m, (z)"
 //             <<host_poses[opt_pose_idx][5]<<" m"<<std::endl;
+
 }
 
 void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::vector<Eigen::Vector4f>& map,
@@ -832,12 +863,16 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
     thrust::device_vector<Eigen::Matrix4f> transforms(pose_num);
     thrust::transform(thrust::device, poses.begin(), poses.end(), transforms.begin(), get_transform());
     cudaDeviceSynchronize();
+
 //    std::cout<<"Number of generated poses: "<<transforms.size()<<std::endl;
+
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
+
 //    printf("Generate transformations: %3.1f ms \n", time);
+
 
     thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
     int scan_size = scan.size();
@@ -850,7 +885,9 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
 
     int map_odds_size = pow(1000,3);
     thrust::device_vector<float> map_odds(map_odds_size);
+
     thrust::fill(thrust::device, map_odds.begin(), map_odds.end(), NULL_ODDS);
+
     cudaDeviceSynchronize();
 
 //    method 1
@@ -870,8 +907,10 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventElapsedTime(&time, start, stop);
 //    printf("Generate hashmap: %3.1f ms \n", time);
 
+
 //    std::cout<<"Number of points in scan: "<<scan_size<<std::endl;
 //    std::cout<<"Number of points in map: "<<map_size<<std::endl;
+
 
 //    create thrust vector of thrust vector
 //    thrust::device_vector<Eigen::Vector3f> trans_scans[pose_num];
@@ -889,6 +928,7 @@ void ComputeOptimalPoseV3(const std::vector<Eigen::Vector3f>& scan, const std::v
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
+
 //    printf("Calculate optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - scores.begin();
@@ -910,11 +950,13 @@ void ComputeOptimalPoseV4(const std::vector<Eigen::Vector3f>& scan, const std::v
                           float& map_resolution)
 {
 
+
     float time;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
+
     thrust::device_vector<Eigen::Matrix4f> transforms = GenerateTransform(angular_init_pose, angular_window_size, angular_step_size,
             linear_init_pose, linear_window_size, linear_step_size);
 //    std::cout<<"Number of generated poses: "<<transforms.size()<<std::endl;
@@ -926,12 +968,14 @@ void ComputeOptimalPoseV4(const std::vector<Eigen::Vector3f>& scan, const std::v
 
     thrust::device_vector<Eigen::Vector3f> dev_scan = scan;
     int scan_size = scan.size();
+
     thrust::device_vector<Eigen::Vector4f> dev_map = map;
     int map_size = map.size();
 
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
+
     std::vector<int> minmax = MinMaxXYZ(dev_map, map_size);
 
     thrust::device_vector<int> dev_offset(3);
@@ -969,11 +1013,13 @@ void ComputeOptimalPoseV4(const std::vector<Eigen::Vector3f>& scan, const std::v
             thrust::raw_pointer_cast(dev_scan.data()), scan_size,thrust::raw_pointer_cast(map_odds.data()), map_size, map_resolution,
             thrust::raw_pointer_cast(dev_offset.data()), thrust::raw_pointer_cast(dev_maplength.data()),map_odds_size));
     cudaDeviceSynchronize();
+
     thrust::device_vector<float>::iterator max_element_iter = thrust::max_element(scores.begin(), scores.end());
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
+
 //    printf("Time to compute optimal pose: %3.1f ms \n", time);
 
     int opt_pose_idx = max_element_iter - scores.begin();
@@ -981,5 +1027,6 @@ void ComputeOptimalPoseV4(const std::vector<Eigen::Vector3f>& scan, const std::v
     std::cout<<"Optimal Pose Score: "<<scores[opt_pose_idx]<<std::endl;
 
 }
+
 
 
